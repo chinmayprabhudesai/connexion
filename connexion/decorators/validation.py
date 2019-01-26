@@ -8,7 +8,7 @@ import six
 from jsonschema import Draft4Validator, ValidationError, draft4_format_checker
 from werkzeug import FileStorage
 
-from ..exceptions import ExtraParameterProblem
+from ..exceptions import ExtraParameterProblem, ProblemException
 from ..http_facts import FORM_CONTENT_TYPES
 from ..json_schema import Draft4RequestValidator, Draft4ResponseValidator
 from ..problem import problem
@@ -126,17 +126,19 @@ class RequestBodyValidator(object):
 
                     if ctype_is_json:
                         # Content-Type is json but actual body was not parsed
-                        return problem(400,
-                                       "Bad Request",
-                                       "Request body is not valid JSON"
-                                       )
+                        response = ProblemException(400,
+                                                    "Bad Request",
+                                                    "Request body is not valid JSON"
+                                                    ).to_problem()
+                        return self.api.get_response(response)
                     else:
                         # the body has contents that were not parsed as JSON
-                        return problem(415,
-                                       "Unsupported Media Type",
-                                       "Invalid Content-type ({content_type}), expected JSON data".format(
-                                           content_type=request.headers.get("Content-Type", "")
-                                       ))
+                        response = ProblemException(415,
+                                                    "Unsupported Media Type",
+                                                    "Invalid Content-type ({content_type}), expected JSON data".format(
+                                                     content_type=request.headers.get("Content-Type", ""))
+                                                    ).to_problem()
+                        return self.api.get_response(response)
 
                 logger.debug("%s validating schema...", request.url)
                 error = self.validate_schema(data, request.url)
@@ -163,7 +165,10 @@ class RequestBodyValidator(object):
                                 errs += [str(e)]
                                 print(errs)
                     if errs:
-                        return problem(400, 'Bad Request', errs)
+                        response = ProblemException(400,
+                                                    "Bad Request",
+                                                    detail="\n".join(errs)).to_problem()
+                        return self.api.get_response(response)
 
                 error = self.validate_schema(data, request.url)
                 if error:
